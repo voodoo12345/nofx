@@ -9,7 +9,7 @@
 
 ---
 
-An automated crypto futures trading system powered by **DeepSeek/Qwen AI**, supporting **Binance, Hyperliquid, and Aster DEX exchanges**, **multi-AI model live trading competition**, featuring comprehensive market analysis, AI decision-making, **self-learning mechanism**, and professional Web monitoring interface.
+An automated crypto futures trading system powered by **DeepSeek/Qwen AI**, supporting **Binance futures trading**, **multi-AI model live trading competition**, featuring comprehensive market analysis, AI decision-making, **self-learning mechanism**, and professional Web monitoring interface.
 
 > ⚠️ **Risk Warning**: This system is experimental. AI auto-trading carries significant risks. Strongly recommended for learning/research purposes or testing with small amounts only!
 
@@ -23,58 +23,11 @@ Join our Telegram developer community to discuss, share ideas, and get support:
 
 ## 🆕 What's New (Latest Update)
 
-### 🚀 Multi-Exchange Support!
+### 🚀 Latest Improvements
 
-NOFX now supports **three major exchanges**: Binance, Hyperliquid, and Aster DEX!
-
-#### **Hyperliquid Exchange**
-
-A high-performance decentralized perpetual futures exchange!
-
-**Key Features:**
-- ✅ Full trading support (long/short, leverage, stop-loss/take-profit)
-- ✅ Automatic precision handling (order size & price)
-- ✅ Unified trader interface (seamless exchange switching)
-- ✅ Support for both mainnet and testnet
-- ✅ No API keys needed - just your Ethereum private key
-
-**Why Hyperliquid?**
-- 🔥 Lower fees than centralized exchanges
-- 🔒 Non-custodial - you control your funds
-- ⚡ Fast execution with on-chain settlement
-- 🌍 No KYC required
-
-**Quick Start:**
-1. Get your MetaMask private key (remove `0x` prefix)
-2. Set `"exchange": "hyperliquid"` in config.json
-3. Add `"hyperliquid_private_key": "your_key"`
-4. Start trading!
-
-See [Configuration Guide](#-alternative-using-hyperliquid-exchange) for details.
-
-#### **Aster DEX Exchange** (NEW! v2.0.2)
-
-A Binance-compatible decentralized perpetual futures exchange!
-
-**Key Features:**
-- ✅ Binance-style API (easy migration from Binance)
-- ✅ Web3 wallet authentication (secure and decentralized)
-- ✅ Full trading support with automatic precision handling
-- ✅ Lower trading fees than CEX
-- ✅ EVM-compatible (Ethereum, BSC, Polygon, etc.)
-
-**Why Aster?**
-- 🎯 **Binance-compatible API** - minimal code changes required
-- 🔐 **API Wallet System** - separate trading wallet for security
-- 💰 **Competitive fees** - lower than most centralized exchanges
-- 🌐 **Multi-chain support** - trade on your preferred EVM chain
-
-**Quick Start:**
-1. Visit [Aster API Wallet](https://www.asterdex.com/en/api-wallet)
-2. Connect your main wallet and create an API wallet
-3. Copy the API Signer address and Private Key
-4. Set `"exchange": "aster"` in config.json
-5. Add `"aster_user"`, `"aster_signer"`, and `"aster_private_key"`
+- Streamlined Binance integration with simplified configuration
+- Focused documentation for Binance futures workflows
+- Continued enhancements to AI decision-making and monitoring dashboards
 
 ---
 
@@ -440,110 +393,9 @@ cp config.json.example config.json
 
 ---
 
-#### 🔷 Alternative: Using Hyperliquid Exchange
+#### 🔷 Alternative Configurations
 
-**NOFX also supports Hyperliquid** - a decentralized perpetual futures exchange. To use Hyperliquid instead of Binance:
-
-**Step 1**: Get your Ethereum private key (for Hyperliquid authentication)
-
-1. Open **MetaMask** (or any Ethereum wallet)
-2. Export your private key
-3. **Remove the `0x` prefix** from the key
-4. Fund your wallet on [Hyperliquid](https://hyperliquid.xyz)
-
-**Step 2**: Configure `config.json` for Hyperliquid
-
-```json
-{
-  "traders": [
-    {
-      "id": "hyperliquid_trader",
-      "name": "My Hyperliquid Trader",
-      "ai_model": "deepseek",
-      "exchange": "hyperliquid",
-      "hyperliquid_private_key": "your_private_key_without_0x",
-      "hyperliquid_testnet": false,
-      "deepseek_key": "sk-xxxxxxxxxxxxx",
-      "initial_balance": 1000.0,
-      "scan_interval_minutes": 3
-    }
-  ],
-  "use_default_coins": true,
-  "api_server_port": 8080
-}
-```
-
-**Key Differences from Binance Config:**
-- Replace `binance_api_key` + `binance_secret_key` with `hyperliquid_private_key`
-- Add `"exchange": "hyperliquid"` field
-- Set `hyperliquid_testnet: false` for mainnet (or `true` for testnet)
-
-**⚠️ Security Warning**: Never share your private key! Use a dedicated wallet for trading, not your main wallet.
-
----
-
-#### 🔶 Alternative: Using Aster DEX Exchange
-
-**NOFX also supports Aster DEX** - a Binance-compatible decentralized perpetual futures exchange!
-
-**Why Choose Aster?**
-- 🎯 Binance-compatible API (easy migration)
-- 🔐 API Wallet security system
-- 💰 Lower trading fees
-- 🌐 Multi-chain support (ETH, BSC, Polygon)
-- 🌍 No KYC required
-
-**Step 1**: Create Aster API Wallet
-
-1. Visit [Aster API Wallet](https://www.asterdex.com/en/api-wallet)
-2. Connect your main wallet (MetaMask, WalletConnect, etc.)
-3. Click "Create API Wallet"
-4. **Save these 3 items immediately:**
-   - Main Wallet address (User)
-   - API Wallet address (Signer)
-   - API Wallet Private Key (⚠️ shown only once!)
-
-**Step 2**: Configure `config.json` for Aster
-
-```json
-{
-  "traders": [
-    {
-      "id": "aster_deepseek",
-      "name": "Aster DeepSeek Trader",
-      "ai_model": "deepseek",
-      "exchange": "aster",
-      
-      "aster_user": "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
-      "aster_signer": "0x21cF8Ae13Bb72632562c6Fff438652Ba1a151bb0",
-      "aster_private_key": "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
-      
-      "deepseek_key": "sk-xxxxxxxxxxxxx",
-      "initial_balance": 1000.0,
-      "scan_interval_minutes": 3
-    }
-  ],
-  "use_default_coins": true,
-  "api_server_port": 8080,
-  "leverage": {
-    "btc_eth_leverage": 5,
-    "altcoin_leverage": 5
-  }
-}
-```
-
-**Key Configuration Fields:**
-- `"exchange": "aster"` - Set exchange to Aster
-- `aster_user` - Your main wallet address
-- `aster_signer` - API wallet address (from Step 1)
-- `aster_private_key` - API wallet private key (without `0x` prefix)
-
-**📖 For detailed setup instructions, see**: [Aster Integration Guide](ASTER_INTEGRATION.md)
-
-**⚠️ Security Notes**:
-- API wallet is separate from your main wallet (extra security layer)
-- Never share your API private key
-- You can revoke API wallet access anytime at [asterdex.com](https://www.asterdex.com/en/api-wallet)
+Currently, NOFX focuses on Binance futures trading. Historical documentation for other exchanges has been removed to simplify setup and maintenance. All configuration examples in this guide target Binance accounts.
 
 ---
 
@@ -1200,7 +1052,7 @@ This version fixes **critical calculation errors** in the historical trade recor
 ### v2.0.2 (2025-10-29)
 
 **Bug Fixes:**
-- ✅ Fixed Aster exchange precision error (code -1111: "Precision is over the maximum defined for this asset")
+- ✅ Fixed precision error handling (code -1111: "Precision is over the maximum defined for this asset")
 - ✅ Improved price and quantity formatting to match exchange precision requirements
 - ✅ Added detailed precision processing logs for debugging
 - ✅ Enhanced all order functions (OpenLong, OpenShort, CloseLong, CloseShort, SetStopLoss, SetTakeProfit) with proper precision handling

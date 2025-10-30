@@ -1,7 +1,7 @@
 package trader
 
 // Trader 交易器统一接口
-// 支持多个交易平台（币安、Hyperliquid等）
+// 当前仅支持币安合约交易
 type Trader interface {
 	// GetBalance 获取账户余额
 	GetBalance() (map[string]interface{}, error)
