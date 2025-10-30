@@ -599,12 +599,15 @@ For running multiple AI traders competing against each other:
 |-------|-------------|---------------|-----------|
 | `id` | Unique identifier for this trader | `"my_trader"` | ✅ Yes |
 | `name` | Display name | `"My AI Trader"` | ✅ Yes |
-| `ai_model` | AI provider to use | `"deepseek"` or `"qwen"` | ✅ Yes |
+| `ai_model` | AI provider to use | `"deepseek"`, `"qwen"`, `"gpt5"` or `"custom"` | ✅ Yes |
 | `binance_api_key` | Binance API key | `"abc123..."` | ✅ Yes |
 | `binance_secret_key` | Binance Secret key | `"xyz789..."` | ✅ Yes |
 | `use_qwen` | Whether to use Qwen | `true` or `false` | ✅ Yes |
 | `deepseek_key` | DeepSeek API key | `"sk-xxx"` | If using DeepSeek |
 | `qwen_key` | Qwen API key | `"sk-xxx"` | If using Qwen |
+| `openai_api_key` | OpenAI API key for GPT-5 | `"sk-..."` | If using GPT-5 |
+| `openai_model_name` | Optional GPT-5 model override | `"gpt-5.1-mini"` | Optional |
+| `openai_reasoning_effort` | Reasoning effort level for GPT-5 | `"high"`, `"medium"`, etc. | Optional (defaults to `high`) |
 | `initial_balance` | Starting balance for P/L calculation | `1000.0` | ✅ Yes |
 | `scan_interval_minutes` | How often to make decisions | `3` (3-5 recommended) | ✅ Yes |
 | **`leverage`** | **Leverage configuration (v2.0.3+)** | See below | ✅ Yes |

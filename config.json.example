@@ -34,7 +34,20 @@
       "custom_model_name": "gpt-4o",
       "initial_balance": 1000,
       "scan_interval_minutes": 3
-    }，
+    },
+    {
+      "id": "openai_gpt5",
+      "name": "Binance GPT-5 Trader",
+      "ai_model": "gpt5",
+      "exchange": "binance",
+      "binance_api_key": "your_binance_api_key",
+      "binance_secret_key": "your_binance_secret_key",
+      "openai_api_key": "sk-your-openai-gpt5-key",
+      "openai_model_name": "gpt-5.1",
+      "openai_reasoning_effort": "high",
+      "initial_balance": 1000,
+      "scan_interval_minutes": 3
+    },
     {
       "id": "aster_deepseek",
       "name": "Aster DeepSeek Trader",
