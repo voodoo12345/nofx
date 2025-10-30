@@ -17,16 +17,18 @@ const (
 	ProviderDeepSeek Provider = "deepseek"
 	ProviderQwen     Provider = "qwen"
 	ProviderCustom   Provider = "custom"
+	ProviderOpenAI   Provider = "openai"
 )
 
 // Config AI API配置
 type Config struct {
-	Provider  Provider
-	APIKey    string
-	SecretKey string // 阿里云需要
-	BaseURL   string
-	Model     string
-	Timeout   time.Duration
+	Provider        Provider
+	APIKey          string
+	SecretKey       string // 阿里云需要
+	BaseURL         string
+	Model           string
+	Timeout         time.Duration
+	ReasoningEffort string
 }
 
 // 默认配置
@@ -43,6 +45,7 @@ func SetDeepSeekAPIKey(apiKey string) {
 	defaultConfig.APIKey = apiKey
 	defaultConfig.BaseURL = "https://api.deepseek.com/v1"
 	defaultConfig.Model = "deepseek-chat"
+	defaultConfig.ReasoningEffort = ""
 }
 
 // SetQwenAPIKey 设置阿里云Qwen API密钥
@@ -52,6 +55,7 @@ func SetQwenAPIKey(apiKey, secretKey string) {
 	defaultConfig.SecretKey = secretKey
 	defaultConfig.BaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 	defaultConfig.Model = "qwen-plus" // 可选: qwen-turbo, qwen-plus, qwen-max
+	defaultConfig.ReasoningEffort = ""
 }
 
 // SetCustomAPI 设置自定义OpenAI兼容API
@@ -60,6 +64,24 @@ func SetCustomAPI(apiURL, apiKey, modelName string) {
 	defaultConfig.APIKey = apiKey
 	defaultConfig.BaseURL = apiURL
 	defaultConfig.Model = modelName
+	defaultConfig.Timeout = 120 * time.Second
+	defaultConfig.ReasoningEffort = ""
+}
+
+// SetOpenAIConfig 设置OpenAI GPT-5配置
+func SetOpenAIConfig(apiKey, modelName, reasoningEffort string) {
+	defaultConfig.Provider = ProviderOpenAI
+	defaultConfig.APIKey = apiKey
+	defaultConfig.SecretKey = ""
+	defaultConfig.BaseURL = "https://api.openai.com/v1"
+	if modelName == "" {
+		modelName = "gpt-5.1"
+	}
+	defaultConfig.Model = modelName
+	if reasoningEffort == "" {
+		reasoningEffort = "high"
+	}
+	defaultConfig.ReasoningEffort = reasoningEffort
 	defaultConfig.Timeout = 120 * time.Second
 }
 
@@ -74,7 +96,7 @@ func SetConfig(config Config) {
 // CallWithMessages 使用 system + user prompt 调用AI API（推荐）
 func CallWithMessages(systemPrompt, userPrompt string) (string, error) {
 	if defaultConfig.APIKey == "" {
-		return "", fmt.Errorf("AI API密钥未设置，请先调用 SetDeepSeekAPIKey() 或 SetQwenAPIKey()")
+		return "", fmt.Errorf("AI API密钥未设置，请先调用 SetDeepSeekAPIKey()、SetQwenAPIKey()、SetOpenAIConfig() 或 SetCustomAPI()")
 	}
 
 	// 重试配置
@@ -136,6 +158,12 @@ func callOnce(systemPrompt, userPrompt string) (string, error) {
 		"messages":    messages,
 		"temperature": 0.5, // 降低temperature以提高JSON格式稳定性
 		"max_tokens":  2000,
+	}
+
+	if defaultConfig.ReasoningEffort != "" {
+		requestBody["reasoning"] = map[string]string{
+			"effort": defaultConfig.ReasoningEffort,
+		}
 	}
 
 	// 注意：response_format 参数仅 OpenAI 支持，DeepSeek/Qwen 不支持

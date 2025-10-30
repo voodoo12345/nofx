@@ -18,7 +18,7 @@ type AutoTraderConfig struct {
 	// Trader标识
 	ID      string // Trader唯一标识（用于日志目录等）
 	Name    string // Trader显示名称
-	AIModel string // AI模型: "qwen" 或 "deepseek"
+	AIModel string // AI模型: "qwen", "deepseek", "gpt5" 或 "custom"
 
 	// 交易平台选择
 	Exchange string // "binance", "hyperliquid" 或 "aster"
@@ -39,9 +39,12 @@ type AutoTraderConfig struct {
 	CoinPoolAPIURL string
 
 	// AI配置
-	UseQwen     bool
-	DeepSeekKey string
-	QwenKey     string
+	UseQwen               bool
+	DeepSeekKey           string
+	QwenKey               string
+	OpenAIAPIKey          string
+	OpenAIModelName       string
+	OpenAIReasoningEffort string
 
 	// 自定义AI API配置
 	CustomAPIURL    string
@@ -66,21 +69,21 @@ type AutoTraderConfig struct {
 
 // AutoTrader 自动交易器
 type AutoTrader struct {
-	id                   string                 // Trader唯一标识
-	name                 string                 // Trader显示名称
-	aiModel              string                 // AI模型名称
-	exchange             string                 // 交易平台名称
-	config               AutoTraderConfig
-	trader               Trader                 // 使用Trader接口（支持多平台）
-	decisionLogger       *logger.DecisionLogger // 决策日志记录器
-	initialBalance       float64
-	dailyPnL             float64
-	lastResetTime        time.Time
-	stopUntil            time.Time
-	isRunning            bool
-	startTime            time.Time                 // 系统启动时间
-	callCount            int                       // AI调用次数
-	positionFirstSeenTime map[string]int64         // 持仓首次出现时间 (symbol_side -> timestamp毫秒)
+	id                    string // Trader唯一标识
+	name                  string // Trader显示名称
+	aiModel               string // AI模型名称
+	exchange              string // 交易平台名称
+	config                AutoTraderConfig
+	trader                Trader                 // 使用Trader接口（支持多平台）
+	decisionLogger        *logger.DecisionLogger // 决策日志记录器
+	initialBalance        float64
+	dailyPnL              float64
+	lastResetTime         time.Time
+	stopUntil             time.Time
+	isRunning             bool
+	startTime             time.Time        // 系统启动时间
+	callCount             int              // AI调用次数
+	positionFirstSeenTime map[string]int64 // 持仓首次出现时间 (symbol_side -> timestamp毫秒)
 }
 
 // NewAutoTrader 创建自动交易器
@@ -105,6 +108,17 @@ func NewAutoTrader(config AutoTraderConfig) (*AutoTrader, error) {
 		// 使用自定义API
 		mcp.SetCustomAPI(config.CustomAPIURL, config.CustomAPIKey, config.CustomModelName)
 		log.Printf("🤖 [%s] 使用自定义AI API: %s (模型: %s)", config.Name, config.CustomAPIURL, config.CustomModelName)
+	} else if config.AIModel == "gpt5" {
+		reasoningEffort := config.OpenAIReasoningEffort
+		if reasoningEffort == "" {
+			reasoningEffort = "high"
+		}
+		modelName := config.OpenAIModelName
+		if modelName == "" {
+			modelName = "gpt-5.1"
+		}
+		mcp.SetOpenAIConfig(config.OpenAIAPIKey, modelName, reasoningEffort)
+		log.Printf("🤖 [%s] 使用OpenAI GPT-5 (模型: %s, reasoning: %s)", config.Name, modelName, reasoningEffort)
 	} else if config.UseQwen || config.AIModel == "qwen" {
 		// 使用Qwen
 		mcp.SetQwenAPIKey(config.QwenKey, "")
@@ -159,18 +173,18 @@ func NewAutoTrader(config AutoTraderConfig) (*AutoTrader, error) {
 	decisionLogger := logger.NewDecisionLogger(logDir)
 
 	return &AutoTrader{
-		id:                   config.ID,
-		name:                 config.Name,
-		aiModel:              config.AIModel,
-		exchange:             config.Exchange,
-		config:               config,
-		trader:               trader,
-		decisionLogger:       decisionLogger,
-		initialBalance:       config.InitialBalance,
-		lastResetTime:        time.Now(),
-		startTime:            time.Now(),
-		callCount:            0,
-		isRunning:            false,
+		id:                    config.ID,
+		name:                  config.Name,
+		aiModel:               config.AIModel,
+		exchange:              config.Exchange,
+		config:                config,
+		trader:                trader,
+		decisionLogger:        decisionLogger,
+		initialBalance:        config.InitialBalance,
+		lastResetTime:         time.Now(),
+		startTime:             time.Now(),
+		callCount:             0,
+		isRunning:             false,
 		positionFirstSeenTime: make(map[string]int64),
 	}, nil
 }
@@ -515,11 +529,11 @@ func (at *AutoTrader) buildTradingContext() (*decision.Context, error) {
 
 	// 6. 构建上下文
 	ctx := &decision.Context{
-		CurrentTime:      time.Now().Format("2006-01-02 15:04:05"),
-		RuntimeMinutes:   int(time.Since(at.startTime).Minutes()),
-		CallCount:        at.callCount,
-		BTCETHLeverage:   at.config.BTCETHLeverage,   // 使用配置的杠杆倍数
-		AltcoinLeverage:  at.config.AltcoinLeverage,  // 使用配置的杠杆倍数
+		CurrentTime:     time.Now().Format("2006-01-02 15:04:05"),
+		RuntimeMinutes:  int(time.Since(at.startTime).Minutes()),
+		CallCount:       at.callCount,
+		BTCETHLeverage:  at.config.BTCETHLeverage,  // 使用配置的杠杆倍数
+		AltcoinLeverage: at.config.AltcoinLeverage, // 使用配置的杠杆倍数
 		Account: decision.AccountInfo{
 			TotalEquity:      totalEquity,
 			AvailableBalance: availableBalance,

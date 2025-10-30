@@ -597,12 +597,15 @@ cp config.json.example config.json
 |-----|------|--------|-----------|
 | `id` | 此trader的唯一标识符 | `"my_trader"` | ✅ 是 |
 | `name` | 显示名称 | `"我的AI交易员"` | ✅ 是 |
-| `ai_model` | 使用的AI提供商 | `"deepseek"` 或 `"qwen"` | ✅ 是 |
+| `ai_model` | 使用的AI提供商 | `"deepseek"`、`"qwen"`、`"gpt5"` 或 `"custom"` | ✅ 是 |
 | `binance_api_key` | 币安API密钥 | `"abc123..."` | ✅ 是 |
 | `binance_secret_key` | 币安Secret密钥 | `"xyz789..."` | ✅ 是 |
 | `use_qwen` | 是否使用Qwen | `true` 或 `false` | ✅ 是 |
 | `deepseek_key` | DeepSeek API密钥 | `"sk-xxx"` | 使用DeepSeek时必填 |
 | `qwen_key` | Qwen API密钥 | `"sk-xxx"` | 使用Qwen时必填 |
+| `openai_api_key` | OpenAI GPT-5 API密钥 | `"sk-..."` | 使用GPT-5时必填 |
+| `openai_model_name` | GPT-5模型名称（可选） | `"gpt-5.1-mini"` | 可选 |
+| `openai_reasoning_effort` | GPT-5推理力度 | `"high"`、`"medium"` 等 | 可选（默认 `high`） |
 | `initial_balance` | 用于P/L计算的起始余额 | `1000.0` | ✅ 是 |
 | `scan_interval_minutes` | 决策频率（分钟） | `3`（建议3-5） | ✅ 是 |
 | **`leverage`** | **杠杆配置 (v2.0.3+)** | 见下文 | ✅ 是 |
