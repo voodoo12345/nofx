@@ -27,6 +27,8 @@ type Data struct {
 	FundingRate       float64
 	IntradaySeries    *IntradayData
 	LongerTermContext *LongerTermData
+	CurrentOBV        float64
+	BollingerBands    *BollingerData
 }
 
 // OIData Open Interest数据
@@ -37,15 +39,15 @@ type OIData struct {
 
 // IntradayData 日内数据(3分钟间隔)
 type IntradayData struct {
-	MidPrices        []float64
-	EMA20Values      []float64
-	MACDValues       []float64
-	RSI7Values       []float64
-	RSI14Values      []float64
-	OBVValues        []float64
-	BollingerSMA20   []float64
-	BollingerUpper20 []float64
-	BollingerLower20 []float64
+	MidPrices       []float64
+	EMA20Values     []float64
+	MACDValues      []float64
+	RSI7Values      []float64
+	RSI14Values     []float64
+	OBVValues       []float64
+	BollingerUpper  []float64
+	BollingerMiddle []float64
+	BollingerLower  []float64
 }
 
 // LongerTermData 长期数据(4小时时间框架)
@@ -97,6 +99,12 @@ func Get(symbol string) (*Data, error) {
 	currentEMA20 := calculateEMA(klines3m, 20)
 	currentMACD := calculateMACD(klines3m)
 	currentRSI7 := calculateRSI(klines3m, 7)
+	obvSeries := calculateOBV(klines3m)
+	currentOBV := 0.0
+	if len(obvSeries) > 0 {
+		currentOBV = obvSeries[len(obvSeries)-1]
+	}
+	bollingerSeries, bollingerData := calculateBollinger(klines3m, 20)
 
 	// 计算价格变化百分比
 	// 1小时价格变化 = 20个3分钟K线前的价格
@@ -129,6 +137,7 @@ func Get(symbol string) (*Data, error) {
 
 	// 计算日内系列数据
 	intradayData := calculateIntradaySeries(klines3m)
+	populateIntradayVolumeSignals(intradayData, obvSeries, bollingerSeries)
 
 	currentOBV := 0.0
 	if intradayData != nil && len(intradayData.OBVValues) > 0 {
@@ -164,6 +173,8 @@ func Get(symbol string) (*Data, error) {
 		FundingRate:       fundingRate,
 		IntradaySeries:    intradayData,
 		LongerTermContext: longerTermData,
+		CurrentOBV:        currentOBV,
+		BollingerBands:    bollingerData,
 	}, nil
 }
 
@@ -392,15 +403,15 @@ func calculateBollingerBandsSeries(klines []Kline, period int) ([]float64, []flo
 // calculateIntradaySeries 计算日内系列数据
 func calculateIntradaySeries(klines []Kline) *IntradayData {
 	data := &IntradayData{
-		MidPrices:        make([]float64, 0, 10),
-		EMA20Values:      make([]float64, 0, 10),
-		MACDValues:       make([]float64, 0, 10),
-		RSI7Values:       make([]float64, 0, 10),
-		RSI14Values:      make([]float64, 0, 10),
-		OBVValues:        make([]float64, 0, 10),
-		BollingerSMA20:   make([]float64, 0, 10),
-		BollingerUpper20: make([]float64, 0, 10),
-		BollingerLower20: make([]float64, 0, 10),
+		MidPrices:       make([]float64, 0, 10),
+		EMA20Values:     make([]float64, 0, 10),
+		MACDValues:      make([]float64, 0, 10),
+		RSI7Values:      make([]float64, 0, 10),
+		RSI14Values:     make([]float64, 0, 10),
+		OBVValues:       make([]float64, 0, 10),
+		BollingerUpper:  make([]float64, 0, 10),
+		BollingerMiddle: make([]float64, 0, 10),
+		BollingerLower:  make([]float64, 0, 10),
 	}
 
 	obvSeries := calculateOBVSeries(klines)
@@ -584,15 +595,15 @@ func Format(data *Data) string {
 	sb.WriteString(fmt.Sprintf("current_price = %.2f, current_ema20 = %.3f, current_macd = %.3f, current_rsi (7 period) = %.3f\n\n",
 		data.CurrentPrice, data.CurrentEMA20, data.CurrentMACD, data.CurrentRSI7))
 
-	if data.IntradaySeries != nil && len(data.IntradaySeries.OBVValues) > 0 {
-		sb.WriteString(fmt.Sprintf("Latest OBV (3‑minute): %.3f\n", data.CurrentOBV))
-	}
+	sb.WriteString(fmt.Sprintf("On-Balance Volume (OBV): %.3f\n\n", data.CurrentOBV))
 
-	if data.IntradaySeries != nil && len(data.IntradaySeries.BollingerSMA20) > 0 {
-		sb.WriteString(fmt.Sprintf("Latest Bollinger Bands (20‑period SMA, 3‑minute): SMA %.3f, Upper %.3f, Lower %.3f\n\n",
-			data.BollingerSMA20, data.BollingerUpper20, data.BollingerLower20))
-	} else {
-		sb.WriteString("\n")
+	if hasBollingerSnapshot(data.BollingerBands) {
+		sb.WriteString(fmt.Sprintf("Bollinger Bands (20-period, 2σ): Middle %.3f | Upper %.3f | Lower %.3f | Bandwidth %.2f%% | Z-score %+.2fσ\n\n",
+			data.BollingerBands.Middle,
+			data.BollingerBands.Upper,
+			data.BollingerBands.Lower,
+			data.BollingerBands.Bandwidth*100,
+			data.BollingerBands.ZScore))
 	}
 
 	sb.WriteString(fmt.Sprintf("In addition, here is the latest %s open interest and funding rate for perps:\n\n",
@@ -629,13 +640,17 @@ func Format(data *Data) string {
 		}
 
 		if len(data.IntradaySeries.OBVValues) > 0 {
-			sb.WriteString(fmt.Sprintf("On-balance volume: %s\n\n", formatFloatSlice(data.IntradaySeries.OBVValues)))
+			sb.WriteString(fmt.Sprintf("OBV series: %s\n\n", formatFloatSlice(data.IntradaySeries.OBVValues)))
 		}
 
-		if len(data.IntradaySeries.BollingerSMA20) > 0 {
-			sb.WriteString(fmt.Sprintf("Bollinger Bands (20‑period SMA): %s\n", formatFloatSlice(data.IntradaySeries.BollingerSMA20)))
-			sb.WriteString(fmt.Sprintf("Bollinger Bands upper (20‑period): %s\n", formatFloatSlice(data.IntradaySeries.BollingerUpper20)))
-			sb.WriteString(fmt.Sprintf("Bollinger Bands lower (20‑period): %s\n\n", formatFloatSlice(data.IntradaySeries.BollingerLower20)))
+		if len(data.IntradaySeries.BollingerMiddle) > 0 {
+			sb.WriteString(fmt.Sprintf("Bollinger middle (20): %s\n\n", formatFloatSlice(data.IntradaySeries.BollingerMiddle)))
+		}
+		if len(data.IntradaySeries.BollingerUpper) > 0 {
+			sb.WriteString(fmt.Sprintf("Bollinger upper (20): %s\n\n", formatFloatSlice(data.IntradaySeries.BollingerUpper)))
+		}
+		if len(data.IntradaySeries.BollingerLower) > 0 {
+			sb.WriteString(fmt.Sprintf("Bollinger lower (20): %s\n\n", formatFloatSlice(data.IntradaySeries.BollingerLower)))
 		}
 	}
 
@@ -671,6 +686,14 @@ func Format(data *Data) string {
 	}
 
 	return sb.String()
+}
+
+func hasBollingerSnapshot(band *BollingerData) bool {
+	if band == nil {
+		return false
+	}
+
+	return band.Middle != 0 || band.Upper != 0 || band.Lower != 0 || band.Bandwidth != 0 || band.ZScore != 0
 }
 
 // formatFloatSlice 格式化float64切片为字符串
