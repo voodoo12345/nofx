@@ -19,6 +19,10 @@ type Data struct {
 	CurrentEMA20      float64
 	CurrentMACD       float64
 	CurrentRSI7       float64
+	CurrentOBV        float64
+	BollingerSMA20    float64
+	BollingerUpper20  float64
+	BollingerLower20  float64
 	OpenInterest      *OIData
 	FundingRate       float64
 	IntradaySeries    *IntradayData
@@ -33,23 +37,31 @@ type OIData struct {
 
 // IntradayData 日内数据(3分钟间隔)
 type IntradayData struct {
-	MidPrices   []float64
-	EMA20Values []float64
-	MACDValues  []float64
-	RSI7Values  []float64
-	RSI14Values []float64
+	MidPrices        []float64
+	EMA20Values      []float64
+	MACDValues       []float64
+	RSI7Values       []float64
+	RSI14Values      []float64
+	OBVValues        []float64
+	BollingerSMA20   []float64
+	BollingerUpper20 []float64
+	BollingerLower20 []float64
 }
 
 // LongerTermData 长期数据(4小时时间框架)
 type LongerTermData struct {
-	EMA20         float64
-	EMA50         float64
-	ATR3          float64
-	ATR14         float64
-	CurrentVolume float64
-	AverageVolume float64
-	MACDValues    []float64
-	RSI14Values   []float64
+	EMA20            float64
+	EMA50            float64
+	ATR3             float64
+	ATR14            float64
+	CurrentVolume    float64
+	AverageVolume    float64
+	MACDValues       []float64
+	RSI14Values      []float64
+	OBVValues        []float64
+	BollingerSMA20   []float64
+	BollingerUpper20 []float64
+	BollingerLower20 []float64
 }
 
 // Kline K线数据
@@ -118,6 +130,21 @@ func Get(symbol string) (*Data, error) {
 	// 计算日内系列数据
 	intradayData := calculateIntradaySeries(klines3m)
 
+	currentOBV := 0.0
+	if intradayData != nil && len(intradayData.OBVValues) > 0 {
+		currentOBV = intradayData.OBVValues[len(intradayData.OBVValues)-1]
+	}
+
+	currentBollingerSMA20 := 0.0
+	currentBollingerUpper20 := 0.0
+	currentBollingerLower20 := 0.0
+	if intradayData != nil && len(intradayData.BollingerSMA20) > 0 {
+		idx := len(intradayData.BollingerSMA20) - 1
+		currentBollingerSMA20 = intradayData.BollingerSMA20[idx]
+		currentBollingerUpper20 = intradayData.BollingerUpper20[idx]
+		currentBollingerLower20 = intradayData.BollingerLower20[idx]
+	}
+
 	// 计算长期数据
 	longerTermData := calculateLongerTermData(klines4h)
 
@@ -129,6 +156,10 @@ func Get(symbol string) (*Data, error) {
 		CurrentEMA20:      currentEMA20,
 		CurrentMACD:       currentMACD,
 		CurrentRSI7:       currentRSI7,
+		CurrentOBV:        currentOBV,
+		BollingerSMA20:    currentBollingerSMA20,
+		BollingerUpper20:  currentBollingerUpper20,
+		BollingerLower20:  currentBollingerLower20,
 		OpenInterest:      oiData,
 		FundingRate:       fundingRate,
 		IntradaySeries:    intradayData,
@@ -295,15 +326,85 @@ func calculateATR(klines []Kline, period int) float64 {
 	return atr
 }
 
+// calculateOBVSeries 计算OBV序列
+func calculateOBVSeries(klines []Kline) []float64 {
+	if len(klines) == 0 {
+		return nil
+	}
+
+	obvSeries := make([]float64, len(klines))
+	cumulative := 0.0
+
+	for i := range klines {
+		if i > 0 {
+			if klines[i].Close > klines[i-1].Close {
+				cumulative += klines[i].Volume
+			} else if klines[i].Close < klines[i-1].Close {
+				cumulative -= klines[i].Volume
+			}
+		}
+		obvSeries[i] = cumulative
+	}
+
+	return obvSeries
+}
+
+// calculateBollingerBandsSeries 计算布林带序列（返回与klines等长的数组，前期不足用NaN占位）
+func calculateBollingerBandsSeries(klines []Kline, period int) ([]float64, []float64, []float64) {
+	length := len(klines)
+	if length == 0 {
+		return nil, nil, nil
+	}
+
+	sma := make([]float64, length)
+	upper := make([]float64, length)
+	lower := make([]float64, length)
+
+	for i := 0; i < length; i++ {
+		if i+1 < period {
+			sma[i] = math.NaN()
+			upper[i] = math.NaN()
+			lower[i] = math.NaN()
+			continue
+		}
+
+		sum := 0.0
+		for j := i + 1 - period; j <= i; j++ {
+			sum += klines[j].Close
+		}
+		mean := sum / float64(period)
+
+		variance := 0.0
+		for j := i + 1 - period; j <= i; j++ {
+			diff := klines[j].Close - mean
+			variance += diff * diff
+		}
+		stdDev := math.Sqrt(variance / float64(period))
+
+		sma[i] = mean
+		upper[i] = mean + 2*stdDev
+		lower[i] = mean - 2*stdDev
+	}
+
+	return sma, upper, lower
+}
+
 // calculateIntradaySeries 计算日内系列数据
 func calculateIntradaySeries(klines []Kline) *IntradayData {
 	data := &IntradayData{
-		MidPrices:   make([]float64, 0, 10),
-		EMA20Values: make([]float64, 0, 10),
-		MACDValues:  make([]float64, 0, 10),
-		RSI7Values:  make([]float64, 0, 10),
-		RSI14Values: make([]float64, 0, 10),
+		MidPrices:        make([]float64, 0, 10),
+		EMA20Values:      make([]float64, 0, 10),
+		MACDValues:       make([]float64, 0, 10),
+		RSI7Values:       make([]float64, 0, 10),
+		RSI14Values:      make([]float64, 0, 10),
+		OBVValues:        make([]float64, 0, 10),
+		BollingerSMA20:   make([]float64, 0, 10),
+		BollingerUpper20: make([]float64, 0, 10),
+		BollingerLower20: make([]float64, 0, 10),
 	}
+
+	obvSeries := calculateOBVSeries(klines)
+	bollingerSMA, bollingerUpper, bollingerLower := calculateBollingerBandsSeries(klines, 20)
 
 	// 获取最近10个数据点
 	start := len(klines) - 10
@@ -313,6 +414,9 @@ func calculateIntradaySeries(klines []Kline) *IntradayData {
 
 	for i := start; i < len(klines); i++ {
 		data.MidPrices = append(data.MidPrices, klines[i].Close)
+		if i < len(obvSeries) {
+			data.OBVValues = append(data.OBVValues, obvSeries[i])
+		}
 
 		// 计算每个点的EMA20
 		if i >= 19 {
@@ -335,6 +439,12 @@ func calculateIntradaySeries(klines []Kline) *IntradayData {
 			rsi14 := calculateRSI(klines[:i+1], 14)
 			data.RSI14Values = append(data.RSI14Values, rsi14)
 		}
+
+		if i < len(bollingerSMA) && !math.IsNaN(bollingerSMA[i]) {
+			data.BollingerSMA20 = append(data.BollingerSMA20, bollingerSMA[i])
+			data.BollingerUpper20 = append(data.BollingerUpper20, bollingerUpper[i])
+			data.BollingerLower20 = append(data.BollingerLower20, bollingerLower[i])
+		}
 	}
 
 	return data
@@ -343,8 +453,12 @@ func calculateIntradaySeries(klines []Kline) *IntradayData {
 // calculateLongerTermData 计算长期数据
 func calculateLongerTermData(klines []Kline) *LongerTermData {
 	data := &LongerTermData{
-		MACDValues:  make([]float64, 0, 10),
-		RSI14Values: make([]float64, 0, 10),
+		MACDValues:       make([]float64, 0, 10),
+		RSI14Values:      make([]float64, 0, 10),
+		OBVValues:        make([]float64, 0, 10),
+		BollingerSMA20:   make([]float64, 0, 10),
+		BollingerUpper20: make([]float64, 0, 10),
+		BollingerLower20: make([]float64, 0, 10),
 	}
 
 	// 计算EMA
@@ -366,13 +480,19 @@ func calculateLongerTermData(klines []Kline) *LongerTermData {
 		data.AverageVolume = sum / float64(len(klines))
 	}
 
-	// 计算MACD和RSI序列
+	obvSeries := calculateOBVSeries(klines)
+	bollingerSMA, bollingerUpper, bollingerLower := calculateBollingerBandsSeries(klines, 20)
+
+	// 计算MACD、RSI及布林带序列
 	start := len(klines) - 10
 	if start < 0 {
 		start = 0
 	}
 
 	for i := start; i < len(klines); i++ {
+		if i < len(obvSeries) {
+			data.OBVValues = append(data.OBVValues, obvSeries[i])
+		}
 		if i >= 25 {
 			macd := calculateMACD(klines[:i+1])
 			data.MACDValues = append(data.MACDValues, macd)
@@ -380,6 +500,11 @@ func calculateLongerTermData(klines []Kline) *LongerTermData {
 		if i >= 14 {
 			rsi14 := calculateRSI(klines[:i+1], 14)
 			data.RSI14Values = append(data.RSI14Values, rsi14)
+		}
+		if i < len(bollingerSMA) && !math.IsNaN(bollingerSMA[i]) {
+			data.BollingerSMA20 = append(data.BollingerSMA20, bollingerSMA[i])
+			data.BollingerUpper20 = append(data.BollingerUpper20, bollingerUpper[i])
+			data.BollingerLower20 = append(data.BollingerLower20, bollingerLower[i])
 		}
 	}
 
@@ -459,6 +584,17 @@ func Format(data *Data) string {
 	sb.WriteString(fmt.Sprintf("current_price = %.2f, current_ema20 = %.3f, current_macd = %.3f, current_rsi (7 period) = %.3f\n\n",
 		data.CurrentPrice, data.CurrentEMA20, data.CurrentMACD, data.CurrentRSI7))
 
+	if data.IntradaySeries != nil && len(data.IntradaySeries.OBVValues) > 0 {
+		sb.WriteString(fmt.Sprintf("Latest OBV (3‑minute): %.3f\n", data.CurrentOBV))
+	}
+
+	if data.IntradaySeries != nil && len(data.IntradaySeries.BollingerSMA20) > 0 {
+		sb.WriteString(fmt.Sprintf("Latest Bollinger Bands (20‑period SMA, 3‑minute): SMA %.3f, Upper %.3f, Lower %.3f\n\n",
+			data.BollingerSMA20, data.BollingerUpper20, data.BollingerLower20))
+	} else {
+		sb.WriteString("\n")
+	}
+
 	sb.WriteString(fmt.Sprintf("In addition, here is the latest %s open interest and funding rate for perps:\n\n",
 		data.Symbol))
 
@@ -491,6 +627,16 @@ func Format(data *Data) string {
 		if len(data.IntradaySeries.RSI14Values) > 0 {
 			sb.WriteString(fmt.Sprintf("RSI indicators (14‑Period): %s\n\n", formatFloatSlice(data.IntradaySeries.RSI14Values)))
 		}
+
+		if len(data.IntradaySeries.OBVValues) > 0 {
+			sb.WriteString(fmt.Sprintf("On-balance volume: %s\n\n", formatFloatSlice(data.IntradaySeries.OBVValues)))
+		}
+
+		if len(data.IntradaySeries.BollingerSMA20) > 0 {
+			sb.WriteString(fmt.Sprintf("Bollinger Bands (20‑period SMA): %s\n", formatFloatSlice(data.IntradaySeries.BollingerSMA20)))
+			sb.WriteString(fmt.Sprintf("Bollinger Bands upper (20‑period): %s\n", formatFloatSlice(data.IntradaySeries.BollingerUpper20)))
+			sb.WriteString(fmt.Sprintf("Bollinger Bands lower (20‑period): %s\n\n", formatFloatSlice(data.IntradaySeries.BollingerLower20)))
+		}
 	}
 
 	if data.LongerTermContext != nil {
@@ -511,6 +657,16 @@ func Format(data *Data) string {
 
 		if len(data.LongerTermContext.RSI14Values) > 0 {
 			sb.WriteString(fmt.Sprintf("RSI indicators (14‑Period): %s\n\n", formatFloatSlice(data.LongerTermContext.RSI14Values)))
+		}
+
+		if len(data.LongerTermContext.OBVValues) > 0 {
+			sb.WriteString(fmt.Sprintf("On-balance volume (4‑hour): %s\n\n", formatFloatSlice(data.LongerTermContext.OBVValues)))
+		}
+
+		if len(data.LongerTermContext.BollingerSMA20) > 0 {
+			sb.WriteString(fmt.Sprintf("Bollinger Bands (20‑period SMA, 4‑hour): %s\n", formatFloatSlice(data.LongerTermContext.BollingerSMA20)))
+			sb.WriteString(fmt.Sprintf("Bollinger Bands upper (4‑hour): %s\n", formatFloatSlice(data.LongerTermContext.BollingerUpper20)))
+			sb.WriteString(fmt.Sprintf("Bollinger Bands lower (4‑hour): %s\n\n", formatFloatSlice(data.LongerTermContext.BollingerLower20)))
 		}
 	}
 
