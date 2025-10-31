@@ -108,56 +108,67 @@ func calculateBollinger(klines []Kline, period int) (*BollingerSeries, *Bollinge
 }
 
 func populateIntradayVolumeSignals(data *IntradayData, obvSeries []float64, bbSeries *BollingerSeries) {
-	if data == nil {
+	if data == nil || len(data.MidPrices) == 0 {
 		return
 	}
 
-	data.OBVValues = data.OBVValues[:0]
-	data.BollingerUpper = data.BollingerUpper[:0]
-	data.BollingerMiddle = data.BollingerMiddle[:0]
-	data.BollingerLower = data.BollingerLower[:0]
-
-	if len(data.MidPrices) == 0 {
-		return
-	}
+	targetLen := len(data.MidPrices)
 
 	if data.OBVValues == nil {
-		data.OBVValues = make([]float64, 0, len(data.MidPrices))
-	}
-	if data.BollingerUpper == nil {
-		data.BollingerUpper = make([]float64, 0, len(data.MidPrices))
-	}
-	if data.BollingerMiddle == nil {
-		data.BollingerMiddle = make([]float64, 0, len(data.MidPrices))
-	}
-	if data.BollingerLower == nil {
-		data.BollingerLower = make([]float64, 0, len(data.MidPrices))
+		data.OBVValues = make([]float64, 0, targetLen)
+	} else {
+		data.OBVValues = data.OBVValues[:0]
 	}
 
-	if len(obvSeries) == 0 && (bbSeries == nil || (len(bbSeries.Middle) == 0 && len(bbSeries.Upper) == 0 && len(bbSeries.Lower) == 0)) {
+	if data.BollingerUpper == nil {
+		data.BollingerUpper = make([]float64, 0, targetLen)
+	} else {
+		data.BollingerUpper = data.BollingerUpper[:0]
+	}
+
+	if data.BollingerMiddle == nil {
+		data.BollingerMiddle = make([]float64, 0, targetLen)
+	} else {
+		data.BollingerMiddle = data.BollingerMiddle[:0]
+	}
+
+	if data.BollingerLower == nil {
+		data.BollingerLower = make([]float64, 0, targetLen)
+	} else {
+		data.BollingerLower = data.BollingerLower[:0]
+	}
+
+	// Align the indicator windows with the intraday slice by taking the most recent values.
+	if len(obvSeries) > 0 {
+		start := len(obvSeries) - targetLen
+		if start < 0 {
+			start = 0
+		}
+		for i := start; i < len(obvSeries); i++ {
+			data.OBVValues = append(data.OBVValues, obvSeries[i])
+		}
+	}
+
+	if bbSeries == nil {
 		return
 	}
 
-	start := len(obvSeries) - len(data.MidPrices)
-	if start < 0 {
-		start = 0
+	// Bollinger calculations might not be available for the earliest candles; append zeros to retain alignment.
+	appendRange := func(dst []float64, src []float64) []float64 {
+		if len(src) == 0 {
+			return dst
+		}
+		start := len(src) - targetLen
+		if start < 0 {
+			start = 0
+		}
+		for i := start; i < len(src); i++ {
+			dst = append(dst, src[i])
+		}
+		return dst
 	}
 
-	for i := start; i < len(obvSeries); i++ {
-		if i < len(obvSeries) {
-			data.OBVValues = append(data.OBVValues, obvSeries[i])
-		}
-
-		if bbSeries != nil {
-			if i < len(bbSeries.Upper) && bbSeries.Upper[i] != 0 {
-				data.BollingerUpper = append(data.BollingerUpper, bbSeries.Upper[i])
-			}
-			if i < len(bbSeries.Middle) && bbSeries.Middle[i] != 0 {
-				data.BollingerMiddle = append(data.BollingerMiddle, bbSeries.Middle[i])
-			}
-			if i < len(bbSeries.Lower) && bbSeries.Lower[i] != 0 {
-				data.BollingerLower = append(data.BollingerLower, bbSeries.Lower[i])
-			}
-		}
-	}
+	data.BollingerUpper = appendRange(data.BollingerUpper, bbSeries.Upper)
+	data.BollingerMiddle = appendRange(data.BollingerMiddle, bbSeries.Middle)
+	data.BollingerLower = appendRange(data.BollingerLower, bbSeries.Lower)
 }
