@@ -58,22 +58,6 @@ type LongerTermData struct {
 	RSI14Values   []float64
 }
 
-// BollingerData 布林带指标
-type BollingerData struct {
-	Middle    float64
-	Upper     float64
-	Lower     float64
-	Bandwidth float64 // (上轨-下轨)/中轨，反映波动率，相对百分比
-	ZScore    float64 // 当前价格相对中轨的标准差位置
-}
-
-// BollingerSeries 布林带序列（用于输出最近数据）
-type BollingerSeries struct {
-	Upper  []float64
-	Middle []float64
-	Lower  []float64
-}
-
 // Kline K线数据
 type Kline struct {
 	OpenTime  int64
@@ -112,7 +96,7 @@ func Get(symbol string) (*Data, error) {
 	if len(obvSeries) > 0 {
 		currentOBV = obvSeries[len(obvSeries)-1]
 	}
-	_, bollingerData := calculateBollinger(klines3m, 20)
+	bollingerSeries, bollingerData := calculateBollinger(klines3m, 20)
 
 	// 计算价格变化百分比
 	// 1小时价格变化 = 20个3分钟K线前的价格
@@ -145,6 +129,7 @@ func Get(symbol string) (*Data, error) {
 
 	// 计算日内系列数据
 	intradayData := calculateIntradaySeries(klines3m)
+	populateIntradayVolumeSignals(intradayData, obvSeries, bollingerSeries)
 
 	// 计算长期数据
 	longerTermData := calculateLongerTermData(klines4h)
@@ -291,93 +276,6 @@ func calculateRSI(klines []Kline, period int) float64 {
 	return rsi
 }
 
-// calculateOBV 计算能量潮指标（On-Balance Volume）
-func calculateOBV(klines []Kline) []float64 {
-	if len(klines) == 0 {
-		return []float64{}
-	}
-
-	obv := make([]float64, len(klines))
-	for i := 1; i < len(klines); i++ {
-		obv[i] = obv[i-1]
-		switch {
-		case klines[i].Close > klines[i-1].Close:
-			obv[i] += klines[i].Volume
-		case klines[i].Close < klines[i-1].Close:
-			obv[i] -= klines[i].Volume
-		}
-	}
-
-	return obv
-}
-
-// calculateBollinger 计算布林带序列（默认使用20周期，2倍标准差）
-func calculateBollinger(klines []Kline, period int) (*BollingerSeries, *BollingerData) {
-	if len(klines) < period {
-		return &BollingerSeries{Upper: []float64{}, Middle: []float64{}, Lower: []float64{}}, &BollingerData{}
-	}
-
-	closes := make([]float64, len(klines))
-	for i, k := range klines {
-		closes[i] = k.Close
-	}
-
-	series := &BollingerSeries{
-		Upper:  make([]float64, len(klines)),
-		Middle: make([]float64, len(klines)),
-		Lower:  make([]float64, len(klines)),
-	}
-
-	var latest *BollingerData
-	for i := period - 1; i < len(closes); i++ {
-		sum := 0.0
-		for j := i - period + 1; j <= i; j++ {
-			sum += closes[j]
-		}
-		mean := sum / float64(period)
-
-		varianceSum := 0.0
-		for j := i - period + 1; j <= i; j++ {
-			diff := closes[j] - mean
-			varianceSum += diff * diff
-		}
-
-		std := math.Sqrt(varianceSum / float64(period))
-		upper := mean + 2*std
-		lower := mean - 2*std
-
-		series.Middle[i] = mean
-		series.Upper[i] = upper
-		series.Lower[i] = lower
-
-		if i == len(closes)-1 {
-			bandwidth := 0.0
-			if mean != 0 {
-				bandwidth = (upper - lower) / mean
-			}
-
-			zScore := 0.0
-			if std > 0 {
-				zScore = (closes[i] - mean) / std
-			}
-
-			latest = &BollingerData{
-				Middle:    mean,
-				Upper:     upper,
-				Lower:     lower,
-				Bandwidth: bandwidth,
-				ZScore:    zScore,
-			}
-		}
-	}
-
-	if latest == nil {
-		latest = &BollingerData{}
-	}
-
-	return series, latest
-}
-
 // calculateATR 计算ATR
 func calculateATR(klines []Kline, period int) float64 {
 	if len(klines) <= period {
@@ -426,9 +324,6 @@ func calculateIntradaySeries(klines []Kline) *IntradayData {
 		BollingerLower:  make([]float64, 0, 10),
 	}
 
-	obvSeries := calculateOBV(klines)
-	bbSeries, _ := calculateBollinger(klines, 20)
-
 	// 获取最近10个数据点
 	start := len(klines) - 10
 	if start < 0 {
@@ -458,22 +353,6 @@ func calculateIntradaySeries(klines []Kline) *IntradayData {
 		if i >= 14 {
 			rsi14 := calculateRSI(klines[:i+1], 14)
 			data.RSI14Values = append(data.RSI14Values, rsi14)
-		}
-
-		if len(obvSeries) > i {
-			data.OBVValues = append(data.OBVValues, obvSeries[i])
-		}
-
-		if bbSeries != nil {
-			if len(bbSeries.Upper) > i && bbSeries.Upper[i] != 0 {
-				data.BollingerUpper = append(data.BollingerUpper, bbSeries.Upper[i])
-			}
-			if len(bbSeries.Middle) > i && bbSeries.Middle[i] != 0 {
-				data.BollingerMiddle = append(data.BollingerMiddle, bbSeries.Middle[i])
-			}
-			if len(bbSeries.Lower) > i && bbSeries.Lower[i] != 0 {
-				data.BollingerLower = append(data.BollingerLower, bbSeries.Lower[i])
-			}
 		}
 	}
 
@@ -601,7 +480,7 @@ func Format(data *Data) string {
 
 	sb.WriteString(fmt.Sprintf("On-Balance Volume (OBV): %.3f\n\n", data.CurrentOBV))
 
-	if data.BollingerBands != nil && (data.BollingerBands.Middle != 0 || data.BollingerBands.Upper != 0 || data.BollingerBands.Lower != 0) {
+	if hasBollingerSnapshot(data.BollingerBands) {
 		sb.WriteString(fmt.Sprintf("Bollinger Bands (20-period, 2σ): Middle %.3f | Upper %.3f | Lower %.3f | Bandwidth %.2f%% | Z-score %+.2fσ\n\n",
 			data.BollingerBands.Middle,
 			data.BollingerBands.Upper,
@@ -680,6 +559,14 @@ func Format(data *Data) string {
 	}
 
 	return sb.String()
+}
+
+func hasBollingerSnapshot(band *BollingerData) bool {
+	if band == nil {
+		return false
+	}
+
+	return band.Middle != 0 || band.Upper != 0 || band.Lower != 0 || band.Bandwidth != 0 || band.ZScore != 0
 }
 
 // formatFloatSlice 格式化float64切片为字符串
