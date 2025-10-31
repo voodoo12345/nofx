@@ -250,10 +250,13 @@ func buildSystemPrompt(accountEquity float64, btcEthLeverage, altcoinLeverage in
 	sb.WriteString("**你拥有的完整数据**：\n")
 	sb.WriteString("- 📊 **原始序列**：3分钟价格序列(MidPrices数组) + 4小时K线序列\n")
 	sb.WriteString("- 📈 **技术序列**：EMA20序列、MACD序列、RSI7序列、RSI14序列\n")
+	sb.WriteString("- 🔄 **趋势/波动指标**：OBV能量潮（追踪量价方向、识别背离）与布林带（中轨、上下轨、带宽揭示波动收缩或扩张）\n")
 	sb.WriteString("- 💰 **资金序列**：成交量序列、持仓量(OI)序列、资金费率\n")
 	sb.WriteString("- 🎯 **筛选标记**：AI500评分 / OI_Top排名（如果有标注）\n\n")
 	sb.WriteString("**分析方法**（完全由你自主决定）：\n")
 	sb.WriteString("- 自由运用序列数据，你可以做但不限于趋势分析、形态识别、支撑阻力、技术阻力位、斐波那契、波动带计算\n")
+	sb.WriteString("- 解读OBV是否与价格同步，出现背离时优先评估趋势反转或动能衰竭再决策\n")
+	sb.WriteString("- 结合布林带位置与带宽：带宽收窄提示潜在突破，触及上/下轨需配合趋势与量能确认，避免机械逆势\n")
 	sb.WriteString("- 多维度交叉验证（价格+量+OI+指标+序列形态）\n")
 	sb.WriteString("- 用你认为最有效的方法发现高确定性机会\n")
 	sb.WriteString("- 综合信心度 ≥ 75 才开仓\n\n")
@@ -311,6 +314,7 @@ func buildSystemPrompt(accountEquity float64, btcEthLeverage, altcoinLeverage in
 	sb.WriteString("- 做空 = 做多，都是赚钱工具\n")
 	sb.WriteString("- 宁可错过，不做低质量交易\n")
 	sb.WriteString("- 风险回报比1:3是底线\n")
+	sb.WriteString("- 解释OBV与布林带信号：若量价背离或带宽扩大确认趋势，请写清动因再执行\n")
 
 	return sb.String()
 }
@@ -325,9 +329,20 @@ func buildUserPrompt(ctx *Context) string {
 
 	// BTC 市场
 	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
-		sb.WriteString(fmt.Sprintf("**BTC**: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f\n\n",
+		btcSummary := fmt.Sprintf("**BTC**: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f",
 			btcData.CurrentPrice, btcData.PriceChange1h, btcData.PriceChange4h,
-			btcData.CurrentMACD, btcData.CurrentRSI7))
+			btcData.CurrentMACD, btcData.CurrentRSI7)
+		btcSummary += fmt.Sprintf(" | OBV: %.0f", btcData.CurrentOBV)
+		if hasBollingerData(btcData.BollingerBands) {
+			position := describeBollingerPosition(btcData.BollingerBands, btcData.CurrentPrice)
+			btcSummary += fmt.Sprintf(" | BB(20): 中轨%.2f 上轨%.2f 下轨%.2f 带宽%.2f%% | %s (%+.2fσ)",
+				btcData.BollingerBands.Middle,
+				btcData.BollingerBands.Upper,
+				btcData.BollingerBands.Lower,
+				btcData.BollingerBands.Bandwidth*100,
+				position, btcData.BollingerBands.ZScore)
+		}
+		sb.WriteString(btcSummary + "\n\n")
 	}
 
 	// 账户
@@ -414,6 +429,33 @@ func buildUserPrompt(ctx *Context) string {
 	sb.WriteString("现在请分析并输出决策（思维链 + JSON）\n")
 
 	return sb.String()
+}
+
+func hasBollingerData(band *market.BollingerData) bool {
+	if band == nil {
+		return false
+	}
+
+	return band.Middle != 0 || band.Upper != 0 || band.Lower != 0
+}
+
+func describeBollingerPosition(band *market.BollingerData, price float64) string {
+	if band == nil {
+		return "数据不足"
+	}
+
+	switch {
+	case band.Upper != 0 && price >= band.Upper:
+		return "触及/突破上轨"
+	case band.Lower != 0 && price <= band.Lower:
+		return "触及/跌破下轨"
+	case band.Middle == 0:
+		return "数据不足"
+	case price >= band.Middle:
+		return "位于上半区"
+	default:
+		return "位于下半区"
+	}
 }
 
 // parseFullDecisionResponse 解析AI的完整决策响应
