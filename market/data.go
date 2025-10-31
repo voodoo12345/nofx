@@ -19,11 +19,11 @@ type Data struct {
 	CurrentEMA20      float64
 	CurrentMACD       float64
 	CurrentRSI7       float64
-	CurrentOBV        float64
 	OpenInterest      *OIData
 	FundingRate       float64
 	IntradaySeries    *IntradayData
 	LongerTermContext *LongerTermData
+	CurrentOBV        float64
 	BollingerBands    *BollingerData
 }
 
@@ -112,7 +112,7 @@ func Get(symbol string) (*Data, error) {
 	if len(obvSeries) > 0 {
 		currentOBV = obvSeries[len(obvSeries)-1]
 	}
-	bbSeries, bollingerData := calculateBollinger(klines3m, 20)
+	_, bollingerData := calculateBollinger(klines3m, 20)
 
 	// 计算价格变化百分比
 	// 1小时价格变化 = 20个3分钟K线前的价格
@@ -144,7 +144,7 @@ func Get(symbol string) (*Data, error) {
 	fundingRate, _ := getFundingRate(symbol)
 
 	// 计算日内系列数据
-	intradayData := calculateIntradaySeries(klines3m, obvSeries, bbSeries)
+	intradayData := calculateIntradaySeries(klines3m)
 
 	// 计算长期数据
 	longerTermData := calculateLongerTermData(klines4h)
@@ -157,11 +157,11 @@ func Get(symbol string) (*Data, error) {
 		CurrentEMA20:      currentEMA20,
 		CurrentMACD:       currentMACD,
 		CurrentRSI7:       currentRSI7,
-		CurrentOBV:        currentOBV,
 		OpenInterest:      oiData,
 		FundingRate:       fundingRate,
 		IntradaySeries:    intradayData,
 		LongerTermContext: longerTermData,
+		CurrentOBV:        currentOBV,
 		BollingerBands:    bollingerData,
 	}, nil
 }
@@ -413,7 +413,7 @@ func calculateATR(klines []Kline, period int) float64 {
 }
 
 // calculateIntradaySeries 计算日内系列数据
-func calculateIntradaySeries(klines []Kline, obvSeries []float64, bbSeries *BollingerSeries) *IntradayData {
+func calculateIntradaySeries(klines []Kline) *IntradayData {
 	data := &IntradayData{
 		MidPrices:       make([]float64, 0, 10),
 		EMA20Values:     make([]float64, 0, 10),
@@ -425,6 +425,9 @@ func calculateIntradaySeries(klines []Kline, obvSeries []float64, bbSeries *Boll
 		BollingerMiddle: make([]float64, 0, 10),
 		BollingerLower:  make([]float64, 0, 10),
 	}
+
+	obvSeries := calculateOBV(klines)
+	bbSeries, _ := calculateBollinger(klines, 20)
 
 	// 获取最近10个数据点
 	start := len(klines) - 10
